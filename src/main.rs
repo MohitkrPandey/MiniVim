@@ -59,7 +59,10 @@ fn run() -> Result<(), String> {
             if args.len() != 3 {
                 return Err("Usage: minivm dis <input.tbc>".into());
             }
-            disassembler::disassemble(&args[2])
+            let code = bytecode::read_bytecode(&args[2])?;
+            let asm = disassembler::disassemble(&code)?;
+            print!("{}", asm);
+            Ok(())
         }
         _ => Err(usage()),
     }
