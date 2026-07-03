@@ -1,14 +1,38 @@
 use crate::isa::Op;
 use crate::bytecode;
 
-pub fn run(code: &[u8]) -> Result<(), String> {
+fn format_op(op: Op) -> String {
+    match op {
+        Op::Push(value) => format!("PUSH {}", value),
+        Op::Pop => "POP".to_string(),
+        Op::Dup => "DUP".to_string(),
+        Op::Swap => "SWAP".to_string(),
+        Op::Add => "ADD".to_string(),
+        Op::Sub => "SUB".to_string(),
+        Op::Mul => "MUL".to_string(),
+        Op::Div => "DIV".to_string(),
+        Op::Mod => "MOD".to_string(),
+        Op::Neg => "NEG".to_string(),
+        Op::Load(slot) => format!("LOAD {}", slot),
+        Op::Store(slot) => format!("STORE {}", slot),
+        Op::Print => "PRINT".to_string(),
+        Op::Halt => "HALT".to_string(),
+    }
+}
+
+fn run_internal(code: &[u8], trace: bool) -> Result<(), String> {
     let mut stack = Vec::new();
     let mut globals = [0i64; 256];
     let mut ip = 0;
 
     while ip < code.len() {
+        let current_ip = ip;
         let (op, next_ip) = Op::decode(code, ip)?;
         ip = next_ip;
+
+        if trace {
+            println!("ip={} {} stack={:?}", current_ip, format_op(op), stack);
+        }
 
         match op {
             Op::Push(value) => {
@@ -92,7 +116,19 @@ pub fn run(code: &[u8]) -> Result<(), String> {
     Err("execution reached end of bytecode without HALT".into())
 }
 
-pub fn run_file(input: &str, _trace: bool) -> Result<(), String> {
+pub fn run(code: &[u8]) -> Result<(), String> {
+    run_internal(code, false)
+}
+
+pub fn run_trace(code: &[u8]) -> Result<(), String> {
+    run_internal(code, true)
+}
+
+pub fn run_file(input: &str, trace: bool) -> Result<(), String> {
     let code = bytecode::read_bytecode(input)?;
-    run(&code)
+    if trace {
+        run_trace(&code)
+    } else {
+        run(&code)
+    }
 }
