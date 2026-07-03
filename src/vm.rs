@@ -20,6 +20,10 @@ fn format_op(op: Op) -> String {
     }
 }
 
+fn trap(ip: usize, message: &str) -> String {
+    format!("trap at ip=0x{:04X}: {}", ip, message)
+}
+
 fn run_internal(code: &[u8], trace: bool) -> Result<(), String> {
     let mut stack = Vec::new();
     let mut globals = [0i64; 256];
@@ -27,7 +31,14 @@ fn run_internal(code: &[u8], trace: bool) -> Result<(), String> {
 
     while ip < code.len() {
         let current_ip = ip;
-        let (op, next_ip) = Op::decode(code, ip)?;
+        let (op, next_ip) = Op::decode(code, ip).map_err(|err| {
+            let msg = if err.contains("truncated") {
+                "truncated instruction"
+            } else {
+                &err
+            };
+            trap(current_ip, msg)
+        })?;
         ip = next_ip;
 
         if trace {
@@ -37,74 +48,74 @@ fn run_internal(code: &[u8], trace: bool) -> Result<(), String> {
         match op {
             Op::Push(value) => {
                 if stack.len() >= 1024 {
-                    return Err("stack overflow".into());
+                    return Err(trap(current_ip, "stack overflow"));
                 }
                 stack.push(value);
             }
             Op::Pop => {
-                stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+                stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
             }
             Op::Dup => {
-                let value = *stack.last().ok_or_else(|| "stack underflow".to_string())?;
+                let value = *stack.last().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 if stack.len() >= 1024 {
-                    return Err("stack overflow".into());
+                    return Err(trap(current_ip, "stack overflow"));
                 }
                 stack.push(value);
             }
             Op::Swap => {
                 if stack.len() < 2 {
-                    return Err("stack underflow".into());
+                    return Err(trap(current_ip, "stack underflow"));
                 }
                 let len = stack.len();
                 stack.swap(len - 1, len - 2);
             }
             Op::Add => {
-                let b = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
-                let a = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+                let b = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
+                let a = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 stack.push(a + b);
             }
             Op::Sub => {
-                let b = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
-                let a = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+                let b = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
+                let a = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 stack.push(a - b);
             }
             Op::Mul => {
-                let b = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
-                let a = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+                let b = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
+                let a = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 stack.push(a * b);
             }
             Op::Div => {
-                let b = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
-                let a = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+                let b = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
+                let a = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 if b == 0 {
-                    return Err("divide by zero".into());
+                    return Err(trap(current_ip, "divide by zero"));
                 }
                 stack.push(a / b);
             }
             Op::Mod => {
-                let b = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
-                let a = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+                let b = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
+                let a = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 if b == 0 {
-                    return Err("modulo by zero".into());
+                    return Err(trap(current_ip, "modulo by zero"));
                 }
                 stack.push(a % b);
             }
             Op::Neg => {
-                let value = stack.last_mut().ok_or_else(|| "stack underflow".to_string())?;
+                let value = stack.last_mut().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 *value = -*value;
             }
             Op::Load(slot) => {
                 if stack.len() >= 1024 {
-                    return Err("stack overflow".into());
+                    return Err(trap(current_ip, "stack overflow"));
                 }
                 stack.push(globals[slot as usize]);
             }
             Op::Store(slot) => {
-                let value = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+                let value = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 globals[slot as usize] = value;
             }
             Op::Print => {
-                let value = stack.pop().ok_or_else(|| "stack underflow".to_string())?;
+                let value = stack.pop().ok_or_else(|| trap(current_ip, "stack underflow"))?;
                 println!("{}", value);
             }
             Op::Halt => {
@@ -113,7 +124,7 @@ fn run_internal(code: &[u8], trace: bool) -> Result<(), String> {
         }
     }
 
-    Err("execution reached end of bytecode without HALT".into())
+    Err(trap(ip, "missing HALT"))
 }
 
 pub fn run(code: &[u8]) -> Result<(), String> {
