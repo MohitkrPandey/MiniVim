@@ -1,7 +1,7 @@
 use crate::isa::Op;
 
-pub fn assemble(input: &str, _output: &str) -> Result<(), String> {
-    assemble_bytes(input).map(|_| ())
+pub fn assemble(input: &str) -> Result<Vec<u8>, String> {
+    assemble_bytes(input)
 }
 
 fn assemble_bytes(input: &str) -> Result<Vec<u8>, String> {
