@@ -50,8 +50,8 @@ fn run() -> Result<(), String> {
         }
         "run" => {
             match args.len() {
-                3 => vm::run(&args[2], false),
-                4 if args[2] == "--trace" => vm::run(&args[3], true),
+                3 => vm::run_file(&args[2], false),
+                4 if args[2] == "--trace" => vm::run_file(&args[3], true),
                 _ => Err("Usage: minivm run [--trace] <input.tbc>".into()),
             }
         }
